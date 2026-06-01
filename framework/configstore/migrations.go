@@ -828,6 +828,9 @@ func triggerMigrations(ctx context.Context, db *gorm.DB) error {
 	if err := migrationAddAdditionalAttributesToPricing(ctx, db); err != nil {
 		return err
 	}
+	if err := migrationAddLogPreTransformRequestDataColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -8975,8 +8978,7 @@ func migrationAddMCPClientTLSConfigColumn(ctx context.Context, db *gorm.DB) erro
 // metadata (e.g. description) as a JSON blob. It is intentionally excluded
 // from UpsertModelPrices' update list so the 24-hour pricing sync never
 // overwrites it.
-func migrationAddAdditionalAttributesToPricing(ctx context.Context, db *gorm.DB) error {
-	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+func migrationAddAdditionalAttributesToPricing(ctx context.Context, db *gorm.DB) error {	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
 		ID: "add_additional_attributes_to_pricing",
 		Migrate: func(tx *gorm.DB) error {
 			tx = tx.WithContext(ctx)
@@ -8999,6 +9001,34 @@ func migrationAddAdditionalAttributesToPricing(ctx context.Context, db *gorm.DB)
 	}})
 	if err := m.Migrate(); err != nil {
 		return fmt.Errorf("error running add_additional_attributes_to_pricing migration: %s", err.Error())
+	}
+	return nil
+}
+
+func migrationAddLogPreTransformRequestDataColumn(ctx context.Context, db *gorm.DB) error {
+	m := migrator.New(db, migrator.DefaultOptions, []*migrator.Migration{{
+		ID: "add_log_pre_transform_request_data_column",
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			if !tx.Migrator().HasColumn(&tables.TableClientConfig{}, "log_pre_transform_request_data") {
+				if err := tx.Migrator().AddColumn(&tables.TableClientConfig{}, "LogPreTransformRequestData"); err != nil {
+					return fmt.Errorf("failed to add log_pre_transform_request_data column: %w", err)
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			if tx.Migrator().HasColumn(&tables.TableClientConfig{}, "log_pre_transform_request_data") {
+				if err := tx.Migrator().DropColumn(&tables.TableClientConfig{}, "log_pre_transform_request_data"); err != nil {
+					return fmt.Errorf("failed to drop log_pre_transform_request_data column: %w", err)
+				}
+			}
+			return nil
+		},
+	}})
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error running add_log_pre_transform_request_data_column migration: %s", err.Error())
 	}
 	return nil
 }
